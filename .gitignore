@@ -1,0 +1,4 @@
+.venv/
+MASTER_TRAIN.csv
+MASTER_VAL.csv
+images_val2014.csv
