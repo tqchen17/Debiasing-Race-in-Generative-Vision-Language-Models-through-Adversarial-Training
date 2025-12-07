@@ -3,31 +3,54 @@ import json
 import pandas as pd
 import fiftyone as fo
 import fiftyone.zoo as foz
+from contextlib import contextmanager
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
-# Ensure 'images_val2014.csv' is in the same folder as this script!
-INPUT_CSV = 'images_val2014.csv' 
+# Get the absolute path of the directory containing this script
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__)) 
+# Define the target root for ALL FiftyOne data *inside* your repository
+LOCAL_FIFTYONE_ROOT = os.path.join(REPO_ROOT, "data", "fiftyone")
+COCO_DOWNLOAD_DIR = os.path.join(LOCAL_FIFTYONE_ROOT, "coco-2017") 
 
-# Output filenames
+INPUT_CSV = 'images_val2014.csv' 
 TRAIN_OUTPUT = 'MASTER_TRAIN.csv'
 VAL_OUTPUT = 'MASTER_VAL.csv'
+
+# ==========================================
+# Context Manager to Temporarily Set Environment Variable
+# ==========================================
+@contextmanager
+def set_fiftyone_dir(path):
+    # Temporarily sets the global FiftyOne data directory
+    original_dir = os.environ.get("FIFTYONE_DATASET_DIR")
+    os.environ["FIFTYONE_DATASET_DIR"] = path
+    fo.config.dataset_zoo_dir = path
+    try:
+        yield
+    finally:
+        if original_dir is not None:
+            os.environ["FIFTYONE_DATASET_DIR"] = original_dir
+        else:
+            del os.environ["FIFTYONE_DATASET_DIR"]
+        fo.config.dataset_zoo_dir = original_dir if original_dir else os.path.expanduser("~/fiftyone")
 
 def main():
     print("Step 1: Downloading COCO-2017 Raw Files...")
     
-    # 1. Download the data (ignore the return value to avoid the TypeError)
-    foz.download_zoo_dataset(
-        "coco-2017",
-        splits=["train", "validation"],
-        max_samples=None, 
-    )
+    os.makedirs(LOCAL_FIFTYONE_ROOT, exist_ok=True)
     
-    # 2. FIX: specific path construction
-    # We use the global config to find where FiftyOne saves datasets
-    # This is typically ~/fiftyone/coco-2017
-    coco_dir = os.path.join(fo.config.dataset_zoo_dir, "coco-2017")
+    # Use the context manager to force the download location
+    with set_fiftyone_dir(LOCAL_FIFTYONE_ROOT):
+        foz.download_zoo_dataset(
+            "coco-2017",
+            splits=["train", "validation"],
+            max_samples=None, 
+        )
+    
+    # 2. Path construction now uses the fixed, local directory
+    coco_dir = COCO_DOWNLOAD_DIR 
     print(f"Data directory located at: {coco_dir}")
 
     # ==========================================
@@ -42,7 +65,7 @@ def main():
     possible_train_json = [
         os.path.join(coco_dir, "train", "labels", "captions_train2017.json"),
         os.path.join(coco_dir, "raw", "annotations", "captions_train2017.json"),
-        os.path.join(coco_dir, "raw", "captions_train2017.json") # Fallback
+        os.path.join(coco_dir, "raw", "captions_train2017.json") 
     ]
     
     possible_val_json = [
@@ -62,9 +85,9 @@ def main():
     
     print(f"Found Training Captions at: {train_json}")
     print(f"Found Validation Captions at: {val_json}")
-
+    
     # ==========================================
-    # Step 2: Load and Clean Princeton Race Data
+    # Step 2: Process Race Labels
     # ==========================================
     print("\nStep 2: Processing Race Labels...")
     df = pd.read_csv(INPUT_CSV)
@@ -78,12 +101,12 @@ def main():
     # Fix Filenames: Convert '136' -> '000000000136.jpg'
     df_clean['filename'] = df_clean['id'].apply(lambda x: f"{int(x):012d}.jpg")
     
-    # Link to the absolute image paths we found in Step 1.5
     def get_abs_path(row):
         if row['split'] == 'train':
-            return os.path.join(train_img_dir, row['filename'])
+            # Path construction must use the local directory
+            return os.path.join(COCO_DOWNLOAD_DIR, "train", "data", row['filename'])
         else:
-            return os.path.join(val_img_dir, row['filename'])
+            return os.path.join(COCO_DOWNLOAD_DIR, "validation", "data", row['filename'])
 
     df_clean['image_path'] = df_clean.apply(get_abs_path, axis=1)
 
