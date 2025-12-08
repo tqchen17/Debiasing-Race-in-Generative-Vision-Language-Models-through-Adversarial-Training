@@ -1,4 +1,43 @@
+# Python
 .venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Data files (too large for git)
 MASTER_TRAIN.csv
 MASTER_VAL.csv
-data
+data/
+images_val2014.csv
+
+# Training outputs
+logs/
+checkpoints/
+results/
+
+# Model files
+*.h5
+*.pkl
+
+# Downloaded/extracted resources
+Balanced-Datasets-Are-Not-Enough-master/
+Balanced-Datasets-Are-Not-Enough-master.zip
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/*.ipynb
+
+# Temporary files
+test_*.py
+tmp/
