@@ -1,0 +1,78 @@
+========================================================================================================================
+BIAS EVALUATION RESULTS - MULTIPLE SPLITS (Paper Table 1 Format)
+========================================================================================================================
+
+Split                Statistics                Leakage                             Performance         
+                     #light     #dark      λD         λM(F1)     λD(F1)     Δ          F1        
+------------------------------------------------------------------------------------------------------------------------
+original             6099       706        0.8971     0.8971     0.8971     0.0000     0.3481    
+α = 2.0              1412       706        0.6682     0.6137     0.6469     -0.0332    0.3451    
+α = 1.0              706        706        0.5527     0.5818     0.5018     0.0800     0.3445    
+========================================================================================================================
+
+INTERPRETATION:
+  λD      = Dataset Leakage (predictability of race from ground truth captions)
+  λM(F1)  = Model Leakage (predictability of race from generated captions)
+  λD(F1)  = Expected leakage by chance at model's F1
+  Δ       = Bias Amplification (λM - λD(F1))
+
+KEY FINDING:
+  If Δ remains high even with balanced data (α=1), then
+  'Balanced Datasets Are Not Enough' - bias persists regardless of balance!
+========================================================================================================================
+
+========================================================================================================================
+DETAILED METRICS BY SPLIT
+========================================================================================================================
+
+
+original:
+------------------------------------------------------------
+Overall Caption Quality:
+  BLEU-1: 0.3316
+  BLEU-2: 0.1967
+  BLEU-3: 0.1159
+  BLEU-4: 0.0718
+  ROUGE-1: 0.3700
+  ROUGE-2: 0.1285
+  ROUGE-L: 0.3481
+  F1: 0.3481
+
+Per-Race Quality:
+  Light BLEU-4: 0.0724
+  Dark BLEU-4:  0.0665
+  Gap: +0.0059
+
+α = 2.0:
+------------------------------------------------------------
+Overall Caption Quality:
+  BLEU-1: 0.3298
+  BLEU-2: 0.1954
+  BLEU-3: 0.1152
+  BLEU-4: 0.0716
+  ROUGE-1: 0.3681
+  ROUGE-2: 0.1277
+  ROUGE-L: 0.3451
+  F1: 0.3451
+
+Per-Race Quality:
+  Light BLEU-4: 0.0741
+  Dark BLEU-4:  0.0665
+  Gap: +0.0076
+
+α = 1.0:
+------------------------------------------------------------
+Overall Caption Quality:
+  BLEU-1: 0.3284
+  BLEU-2: 0.1958
+  BLEU-3: 0.1158
+  BLEU-4: 0.0717
+  ROUGE-1: 0.3674
+  ROUGE-2: 0.1295
+  ROUGE-L: 0.3445
+  F1: 0.3445
+
+Per-Race Quality:
+  Light BLEU-4: 0.0766
+  Dark BLEU-4:  0.0665
+  Gap: +0.0101

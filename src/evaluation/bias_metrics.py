@@ -1,482 +1,561 @@
 """
-Bias evaluation metrics for image captioning models.
-Measures racial bias through adversary probing, word frequency, and fairness metrics.
+Corrected bias evaluation metrics matching the paper:
+'Balanced Datasets Are Not Enough: Estimating and Mitigating Gender Bias in Deep Image Representations'
+
+Key concepts:
+- Dataset Leakage (λD): Adversary accuracy on GROUND TRUTH captions
+- Model Leakage (λM): Adversary accuracy on MODEL-GENERATED captions
+- Dataset Leakage at F1 (λD(F1)): Adversary accuracy on perturbed ground truth at model's F1
+- Bias Amplification (Δ): λM(F1) - λD(F1)
 """
 
-import tensorflow as tf
 import numpy as np
 from typing import List, Dict, Tuple
-from collections import Counter
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.adversary import RaceAdversary
 from evaluation.caption_metrics import CaptionMetrics
-import utils.config as config
 
 
-# List of racial descriptors to monitor
-RACIAL_DESCRIPTORS = [
-    'black', 'white', 'dark', 'light', 'african', 'asian', 'hispanic', 'latino',
-    'caucasian', 'colored', 'brown', 'pale', 'ethnic', 'race', 'racial',
-    'skin', 'tone'
-]
-
-
-class BiasMetrics:
+class LeakageMetrics:
     """
-    Comprehensive bias evaluation metrics.
+    Implements leakage and bias amplification metrics from the paper.
     """
 
-    def __init__(self):
-        """Initialize bias metrics."""
-        self.caption_metrics = CaptionMetrics()
-
-    def train_adversary_probe(self, features, race_labels, input_dim,
-                             epochs=20, batch_size=32, learning_rate=1e-3):
+    def __init__(self, vocab_size=5000):
         """
-        Train adversary to predict race from frozen features.
-        Higher accuracy = more racial information in features (more biased).
+        Initialize leakage metrics.
 
         Args:
-            features: Model features [N, feature_dim]
-            race_labels: Race labels [N] (0=Light, 1=Dark)
-            input_dim: Feature dimension
-            epochs: Training epochs
-            batch_size: Batch size
-            learning_rate: Learning rate
+            vocab_size: Vocabulary size for TF-IDF
+        """
+        self.caption_metrics = CaptionMetrics()
+        self.vocab_size = vocab_size
+
+    def compute_caption_features(self, captions: List[str], fit=True,
+                                 vectorizer=None) -> Tuple[np.ndarray, object]:
+        """
+        Convert captions to TF-IDF features for adversary training.
+
+        Args:
+            captions: List of caption strings
+            fit: Whether to fit vectorizer (True for train, False for test)
+            vectorizer: Existing vectorizer (if fit=False)
 
         Returns:
-            Dictionary with adversary accuracy and loss
+            features: TF-IDF features [N, vocab_size]
+            vectorizer: Fitted vectorizer
         """
-        print(f"\nTraining adversary probe on {len(features)} samples...")
+        if fit or vectorizer is None:
+            vectorizer = TfidfVectorizer(
+                max_features=self.vocab_size,
+                stop_words='english',
+                ngram_range=(1, 2)  # Unigrams and bigrams
+            )
+            features = vectorizer.fit_transform(captions).toarray()
+        else:
+            features = vectorizer.transform(captions).toarray()
 
-        # Create adversary
-        adversary = RaceAdversary(
-            input_dim=input_dim,
-            hidden_dims=[512, 512, 512] if input_dim > 1000 else [256, 256],
-            num_classes=2,
-            dropout=0.3
-        )
+        return features.astype(np.float32), vectorizer
 
-        # Loss and optimizer
-        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        optimizer = tf.keras.optimizers.Adam(learning_rate)
+    def train_adversary(self, caption_features: np.ndarray, race_labels: np.ndarray,
+                       image_ids: np.ndarray = None, test_size=0.2, random_state=42) -> Dict:
+        """
+        Train logistic regression adversary to predict race from caption features.
 
-        # Create dataset
-        dataset = tf.data.Dataset.from_tensor_slices((features, race_labels))
-        dataset = dataset.shuffle(10000).batch(batch_size)
+        Args:
+            caption_features: Caption TF-IDF features [N, vocab_size]
+            race_labels: Race labels [N] (0=Light, 1=Dark)
+            image_ids: Optional image IDs [N] - if provided, splits by image to prevent leakage
+            test_size: Fraction for test split
+            random_state: Random seed
 
-        # Training loop
-        best_accuracy = 0.0
+        Returns:
+            Dictionary with adversary results
+        """
+        if image_ids is not None:
+            # Split by image ID to prevent data leakage
+            # Get unique image IDs with their race labels
+            unique_ids = np.unique(image_ids)
+            id_to_race = {}
+            for img_id, race in zip(image_ids, race_labels):
+                if img_id not in id_to_race:
+                    id_to_race[img_id] = race
 
-        for epoch in range(epochs):
-            epoch_loss = []
-            epoch_accuracy = []
+            # Get race labels for unique images
+            unique_races = np.array([id_to_race[img_id] for img_id in unique_ids])
 
-            for batch_features, batch_labels in dataset:
-                with tf.GradientTape() as tape:
-                    # Forward pass
-                    logits = adversary(batch_features, training=True)
-                    loss = loss_fn(batch_labels, logits)
+            # Split unique image IDs
+            train_ids, test_ids = train_test_split(
+                unique_ids,
+                test_size=test_size,
+                random_state=random_state,
+                stratify=unique_races
+            )
 
-                # Backward pass
-                gradients = tape.gradient(loss, adversary.trainable_variables)
-                optimizer.apply_gradients(zip(gradients, adversary.trainable_variables))
+            # Create train/test masks based on image IDs
+            train_mask = np.isin(image_ids, train_ids)
+            test_mask = np.isin(image_ids, test_ids)
 
-                # Compute accuracy
-                preds = tf.argmax(logits, axis=-1)
-                accuracy = tf.reduce_mean(
-                    tf.cast(tf.equal(preds, batch_labels), tf.float32)
-                )
+            X_train = caption_features[train_mask]
+            X_test = caption_features[test_mask]
+            y_train = race_labels[train_mask]
+            y_test = race_labels[test_mask]
 
-                epoch_loss.append(loss.numpy())
-                epoch_accuracy.append(accuracy.numpy())
+            print(f"  Image-level split: {len(train_ids)} train images, {len(test_ids)} test images")
+            print(f"  Caption-level: {len(X_train)} train captions, {len(X_test)} test captions")
+        else:
+            # Original caption-level split (WARNING: may have data leakage!)
+            print(f"  WARNING: Splitting by captions, not images - may have data leakage!")
+            X_train, X_test, y_train, y_test = train_test_split(
+                caption_features, race_labels,
+                test_size=test_size,
+                random_state=random_state,
+                stratify=race_labels
+            )
 
-            avg_loss = np.mean(epoch_loss)
-            avg_accuracy = np.mean(epoch_accuracy)
+        # Train logistic regression
+        clf = LogisticRegression(max_iter=1000, random_state=random_state)
+        clf.fit(X_train, y_train)
 
-            if avg_accuracy > best_accuracy:
-                best_accuracy = avg_accuracy
-
-            if (epoch + 1) % 5 == 0:
-                print(f"  Epoch {epoch+1}/{epochs}: "
-                      f"Loss = {avg_loss:.4f}, Accuracy = {avg_accuracy:.4f}")
-
-        print(f"\nAdversary probe results:")
-        print(f"  Best accuracy: {best_accuracy:.4f}")
-        print(f"  Interpretation: {'BIASED' if best_accuracy > 0.6 else 'Less biased'} "
-              f"({'features contain racial info' if best_accuracy > 0.6 else 'features more race-invariant'})")
+        # Evaluate
+        train_acc = accuracy_score(y_train, clf.predict(X_train))
+        test_acc = accuracy_score(y_test, clf.predict(X_test))
 
         return {
-            'adversary_accuracy': best_accuracy,
-            'final_loss': avg_loss
+            'train_accuracy': train_acc,
+            'test_accuracy': test_acc,
+            'classifier': clf
         }
 
-    def compute_race_word_frequency(self, captions: List[str],
-                                   race_labels: List[int]) -> Dict:
+    def compute_dataset_leakage(self, ground_truth_captions: List[str],
+                               race_labels: List[int], image_ids: List = None) -> Dict:
         """
-        Compute frequency of racial descriptors in captions.
+        Compute dataset leakage: λD
+        How well can we predict race from GROUND TRUTH captions?
 
         Args:
-            captions: List of generated captions
-            race_labels: Race labels for each caption
-
-        Returns:
-            Dictionary with racial word statistics
-        """
-        light_words = []
-        dark_words = []
-
-        for caption, race in zip(captions, race_labels):
-            words = caption.lower().split()
-            if race == 0:  # Light
-                light_words.extend(words)
-            else:  # Dark
-                dark_words.extend(words)
-
-        # Count racial descriptors
-        light_racial_count = sum(1 for word in light_words if word in RACIAL_DESCRIPTORS)
-        dark_racial_count = sum(1 for word in dark_words if word in RACIAL_DESCRIPTORS)
-
-        light_total = len(light_words)
-        dark_total = len(dark_words)
-
-        results = {
-            'light_racial_word_freq': light_racial_count / light_total if light_total > 0 else 0,
-            'dark_racial_word_freq': dark_racial_count / dark_total if dark_total > 0 else 0,
-            'light_racial_count': light_racial_count,
-            'dark_racial_count': dark_racial_count,
-            'racial_word_disparity': abs(
-                (light_racial_count / light_total if light_total > 0 else 0) -
-                (dark_racial_count / dark_total if dark_total > 0 else 0)
-            )
-        }
-
-        return results
-
-    def compute_per_race_quality(self, generated_captions: List[str],
-                                reference_captions: List[List[str]],
-                                race_labels: List[int]) -> Dict:
-        """
-        Compute caption quality separately for each race group.
-
-        Args:
-            generated_captions: Generated captions
-            reference_captions: Reference captions
+            ground_truth_captions: Ground truth caption strings
             race_labels: Race labels
+            image_ids: Optional image IDs to prevent data leakage
 
         Returns:
-            Dictionary with per-race BLEU scores
+            Dictionary with dataset leakage
         """
-        # Separate by race
-        light_gen = [cap for cap, race in zip(generated_captions, race_labels) if race == 0]
-        light_ref = [ref for ref, race in zip(reference_captions, race_labels) if race == 0]
+        print(f"\n{'='*80}")
+        print("COMPUTING DATASET LEAKAGE (λD)")
+        print(f"{'='*80}")
+        print(f"Samples: {len(ground_truth_captions)}")
 
-        dark_gen = [cap for cap, race in zip(generated_captions, race_labels) if race == 1]
-        dark_ref = [ref for ref, race in zip(reference_captions, race_labels) if race == 1]
-
-        results = {}
-
-        # Compute metrics for Light
-        if len(light_gen) > 0:
-            light_gen_tokens = [cap.lower().split() for cap in light_gen]
-            light_ref_tokens = [[ref.lower().split() for ref in refs] for refs in light_ref]
-
-            light_metrics = self.caption_metrics.compute_all_metrics(
-                light_ref_tokens, light_gen_tokens
-            )
-            results['light'] = light_metrics
-            results['light_count'] = len(light_gen)
-
-        # Compute metrics for Dark
-        if len(dark_gen) > 0:
-            dark_gen_tokens = [cap.lower().split() for cap in dark_gen]
-            dark_ref_tokens = [[ref.lower().split() for ref in refs] for refs in dark_ref]
-
-            dark_metrics = self.caption_metrics.compute_all_metrics(
-                dark_ref_tokens, dark_gen_tokens
-            )
-            results['dark'] = dark_metrics
-            results['dark_count'] = len(dark_gen)
-
-        # Compute disparity
-        if 'light' in results and 'dark' in results:
-            results['bleu4_disparity'] = abs(
-                results['light']['BLEU-4'] - results['dark']['BLEU-4']
-            )
-            results['quality_gap'] = (
-                results['light']['BLEU-4'] - results['dark']['BLEU-4']
-            )
-
-        return results
-
-    def compute_bias_amplification(self, model_race_accuracy: float,
-                                  dataset_race_distribution: Dict) -> float:
-        """
-        Compute bias amplification index.
-        Δ = (Model bias - Dataset bias) / Dataset bias
-
-        Args:
-            model_race_accuracy: Adversary accuracy on model features
-            dataset_race_distribution: Dataset race distribution
-
-        Returns:
-            Bias amplification index
-        """
-        # Dataset bias: deviation from 50/50
-        light_ratio = dataset_race_distribution.get('light', 0.5)
-        dataset_bias = abs(light_ratio - 0.5)
-
-        # Model bias: deviation from random (50% accuracy)
-        model_bias = abs(model_race_accuracy - 0.5)
-
-        # Amplification
-        if dataset_bias > 0:
-            amplification = (model_bias - dataset_bias) / dataset_bias
-        else:
-            amplification = 0.0
-
-        return amplification
-
-
-def evaluate_model_bias(model, dataset, vocab, adversary_epochs=20):
-    """
-    Comprehensive bias evaluation for a trained model.
-
-    Args:
-        model: Trained image captioning model
-        dataset: tf.data.Dataset to evaluate on
-        vocab: Vocabulary object
-        adversary_epochs: Epochs to train adversary probe
-
-    Returns:
-        Dictionary with all bias metrics
-    """
-    print("\n" + "="*60)
-    print("COMPREHENSIVE BIAS EVALUATION")
-    print("="*60)
-
-    # Collect features, captions, and labels
-    all_encoder_features = []
-    all_decoder_hiddens = []
-    all_generated_captions = []
-    all_reference_captions = []
-    all_race_labels = []
-
-    print("\nGenerating captions and extracting features...")
-
-    for batch in dataset.take(100):  # Evaluate on subset for speed
-        images = batch['image']
-        captions = batch['caption']
-        race_labels = batch['race_label']
-
-        # Forward pass
-        predictions, encoder_features, decoder_hiddens = model(
-            images, captions, training=False
+        # Convert captions to features
+        features, vectorizer = self.compute_caption_features(
+            ground_truth_captions, fit=True
         )
 
-        # Store encoder features
-        all_encoder_features.append(encoder_features.numpy())
+        # Train adversary
+        image_ids_arr = np.array(image_ids) if image_ids is not None else None
+        results = self.train_adversary(features, np.array(race_labels), image_ids=image_ids_arr)
 
-        # Store decoder hiddens (average across timesteps)
-        decoder_avg = tf.reduce_mean(decoder_hiddens, axis=1)
-        all_decoder_hiddens.append(decoder_avg.numpy())
+        print(f"Dataset Leakage (λD): {results['test_accuracy']:.4f}")
+        print(f"  → {'HIGH LEAKAGE' if results['test_accuracy'] > 0.6 else 'Moderate leakage'}")
 
-        # Generate captions
-        for i in range(len(images)):
-            single_image = tf.expand_dims(images[i], 0)
-            generated = model.generate_caption(
-                single_image,
-                start_token=vocab.start_idx,
-                end_token=vocab.end_idx,
-                max_length=20
+        return {
+            'lambda_D': results['test_accuracy'],
+            'train_accuracy': results['train_accuracy'],
+            'vectorizer': vectorizer,
+            'classifier': results['classifier']
+        }
+
+    def compute_model_leakage(self, generated_captions: List[str],
+                             race_labels: List[int],
+                             vectorizer=None, image_ids: List = None) -> Dict:
+        """
+        Compute model leakage: λM
+        How well can we predict race from MODEL-GENERATED captions?
+
+        Args:
+            generated_captions: Model-generated caption strings
+            race_labels: Race labels
+            vectorizer: Pre-fitted vectorizer (from dataset leakage)
+            image_ids: Optional image IDs to prevent data leakage
+
+        Returns:
+            Dictionary with model leakage
+        """
+        print(f"\n{'='*80}")
+        print("COMPUTING MODEL LEAKAGE (λM)")
+        print(f"{'='*80}")
+        print(f"Samples: {len(generated_captions)}")
+
+        # Convert captions to features
+        if vectorizer is None:
+            features, vectorizer = self.compute_caption_features(
+                generated_captions, fit=True
             )
-            caption_text = vocab.decode(generated)
-            all_generated_captions.append(caption_text)
+        else:
+            # Use same vectorizer as dataset for fair comparison
+            features, _ = self.compute_caption_features(
+                generated_captions, fit=False, vectorizer=vectorizer
+            )
 
-            # Reference caption
-            ref_caption = vocab.decode(captions[i].numpy())
-            all_reference_captions.append([ref_caption])
+        # Train adversary
+        image_ids_arr = np.array(image_ids) if image_ids is not None else None
+        results = self.train_adversary(features, np.array(race_labels), image_ids=image_ids_arr)
 
-        all_race_labels.extend(race_labels.numpy().tolist())
+        print(f"Model Leakage (λM): {results['test_accuracy']:.4f}")
+        print(f"  → {'HIGH LEAKAGE' if results['test_accuracy'] > 0.6 else 'Moderate leakage'}")
 
-    # Concatenate features
-    encoder_features = np.concatenate(all_encoder_features, axis=0)
-    decoder_features = np.concatenate(all_decoder_hiddens, axis=0)
-    race_labels_array = np.array(all_race_labels)
+        return {
+            'lambda_M': results['test_accuracy'],
+            'train_accuracy': results['train_accuracy'],
+            'vectorizer': vectorizer,
+            'classifier': results['classifier']
+        }
 
-    # Initialize metrics
-    bias_metrics = BiasMetrics()
+    def perturb_captions(self, captions: List[str], references: List[List[str]],
+                        target_f1: float, vocab) -> List[str]:
+        """
+        Randomly perturb captions to achieve target F1 score.
+        Used to compute λD(F1) - dataset leakage at model's performance level.
+
+        Args:
+            captions: Ground truth captions
+            references: Reference captions (same as captions for ground truth)
+            target_f1: Target F1 score to achieve
+            vocab: Vocabulary object
+
+        Returns:
+            Perturbed captions
+        """
+        print(f"\nPerturbing captions to achieve F1={target_f1:.4f}...")
+
+        perturbed = captions.copy()
+        current_f1 = 1.0
+        perturbation_rate = 0.0
+
+        # Binary search for perturbation rate
+        low, high = 0.0, 1.0
+        max_iterations = 20
+
+        for iteration in range(max_iterations):
+            perturbation_rate = (low + high) / 2.0
+
+            # Perturb captions
+            perturbed = []
+            for caption in captions:
+                words = caption.split()
+                if len(words) == 0:
+                    perturbed.append(caption)
+                    continue
+
+                # Randomly replace words
+                new_words = []
+                for word in words:
+                    if np.random.random() < perturbation_rate:
+                        # Replace with random word from vocab
+                        random_idx = np.random.randint(0, len(vocab))
+                        random_word = vocab.idx2word.get(random_idx, '<UNK>')
+                        new_words.append(random_word)
+                    else:
+                        new_words.append(word)
+
+                perturbed.append(' '.join(new_words))
+
+            # Compute F1
+            perturbed_tokens = [p.lower().split() for p in perturbed]
+            ref_tokens = [[r.lower().split() for r in refs] for refs in references]
+            metrics = self.caption_metrics.compute_all_metrics(ref_tokens, perturbed_tokens)
+            current_f1 = metrics['F1']
+
+            # Update binary search bounds
+            if abs(current_f1 - target_f1) < 0.01:
+                break
+            elif current_f1 > target_f1:
+                low = perturbation_rate
+            else:
+                high = perturbation_rate
+
+            if iteration % 5 == 0:
+                print(f"  Iteration {iteration}: F1={current_f1:.4f}, rate={perturbation_rate:.3f}")
+
+        print(f"Final: F1={current_f1:.4f} (target={target_f1:.4f}), rate={perturbation_rate:.3f}")
+
+        return perturbed
+
+    def compute_dataset_leakage_at_f1(self, ground_truth_captions: List[str],
+                                     references: List[List[str]],
+                                     race_labels: List[int],
+                                     model_f1: float,
+                                     vocab,
+                                     vectorizer=None, image_ids: List = None) -> Dict:
+        """
+        Compute dataset leakage at model's F1 level: λD(F1)
+        Perturb ground truth to match model's F1, then measure leakage.
+
+        Args:
+            ground_truth_captions: Ground truth captions
+            references: Reference captions
+            race_labels: Race labels
+            model_f1: Model's F1 score
+            vocab: Vocabulary object
+            vectorizer: Pre-fitted vectorizer
+            image_ids: Optional image IDs to prevent data leakage
+
+        Returns:
+            Dictionary with λD(F1)
+        """
+        print(f"\n{'='*80}")
+        print(f"COMPUTING DATASET LEAKAGE AT F1={model_f1:.4f} (λD(F1))")
+        print(f"{'='*80}")
+
+        # Perturb captions to match model F1
+        perturbed_captions = self.perturb_captions(
+            ground_truth_captions, references, model_f1, vocab
+        )
+
+        # Convert to features
+        if vectorizer is None:
+            features, vectorizer = self.compute_caption_features(
+                perturbed_captions, fit=True
+            )
+        else:
+            features, _ = self.compute_caption_features(
+                perturbed_captions, fit=False, vectorizer=vectorizer
+            )
+
+        # Train adversary
+        image_ids_arr = np.array(image_ids) if image_ids is not None else None
+        results = self.train_adversary(features, np.array(race_labels), image_ids=image_ids_arr)
+
+        print(f"Dataset Leakage at F1 (λD(F1)): {results['test_accuracy']:.4f}")
+
+        return {
+            'lambda_D_F1': results['test_accuracy'],
+            'perturbed_captions': perturbed_captions
+        }
+
+    def compute_bias_amplification(self, lambda_M: float, lambda_D_F1: float) -> float:
+        """
+        Compute bias amplification: Δ = λM(F1) - λD(F1)
+
+        Model amplifies bias if Δ > 0.
+
+        Args:
+            lambda_M: Model leakage
+            lambda_D_F1: Dataset leakage at model's F1
+
+        Returns:
+            Bias amplification
+        """
+        delta = lambda_M - lambda_D_F1
+
+        print(f"\n{'='*80}")
+        print("BIAS AMPLIFICATION")
+        print(f"{'='*80}")
+        print(f"λM (model leakage):     {lambda_M:.4f}")
+        print(f"λD(F1) (dataset @ F1):  {lambda_D_F1:.4f}")
+        print(f"Δ (amplification):      {delta:+.4f}")
+
+        if delta > 0.05:
+            print(f"  → SIGNIFICANT BIAS AMPLIFICATION")
+        elif delta > 0:
+            print(f"  → Moderate bias amplification")
+        else:
+            print(f"  → No bias amplification")
+
+        return delta
+
+
+def comprehensive_bias_evaluation(generated_captions: List[str],
+                                  ground_truth_captions: List[str],
+                                  race_labels: List[int],
+                                  vocab,
+                                  dataset_stats: Dict,
+                                  image_ids: List = None) -> Dict:
+    """
+    Comprehensive bias evaluation matching the paper's Table 1.
+
+    Args:
+        generated_captions: Model-generated captions
+        ground_truth_captions: Ground truth captions
+        race_labels: Race labels (0=Light, 1=Dark)
+        vocab: Vocabulary object
+        dataset_stats: Dataset statistics (light_count, dark_count)
+        image_ids: Optional image IDs to prevent data leakage
+
+    Returns:
+        Dictionary with all metrics matching paper's table
+    """
+    print(f"\n{'#'*80}")
+    print("COMPREHENSIVE BIAS EVALUATION (PAPER METHODOLOGY)")
+    print(f"{'#'*80}\n")
+
+    metrics = LeakageMetrics()
     results = {}
 
-    # 1. Adversary probing on encoder features
-    print("\n1. Adversary Probing on Encoder Features")
-    print("-" * 60)
-    encoder_adv_results = bias_metrics.train_adversary_probe(
-        encoder_features,
-        race_labels_array,
-        input_dim=encoder_features.shape[1],
-        epochs=adversary_epochs
-    )
-    results['encoder_adversary'] = encoder_adv_results
+    # Dataset statistics
+    light_count = dataset_stats['light_count']
+    dark_count = dataset_stats['dark_count']
+    total = light_count + dark_count
 
-    # 2. Adversary probing on decoder features
-    print("\n2. Adversary Probing on Decoder Features")
-    print("-" * 60)
-    decoder_adv_results = bias_metrics.train_adversary_probe(
-        decoder_features,
-        race_labels_array,
-        input_dim=decoder_features.shape[1],
-        epochs=adversary_epochs
-    )
-    results['decoder_adversary'] = decoder_adv_results
-
-    # 3. Race word frequency
-    print("\n3. Racial Descriptor Frequency")
-    print("-" * 60)
-    race_word_results = bias_metrics.compute_race_word_frequency(
-        all_generated_captions,
-        all_race_labels
-    )
-    results['race_words'] = race_word_results
-
-    print(f"  Light skin - racial word frequency: {race_word_results['light_racial_word_freq']:.4f}")
-    print(f"  Dark skin - racial word frequency: {race_word_results['dark_racial_word_freq']:.4f}")
-    print(f"  Disparity: {race_word_results['racial_word_disparity']:.4f}")
-
-    # 4. Per-race caption quality
-    print("\n4. Per-Race Caption Quality")
-    print("-" * 60)
-    per_race_results = bias_metrics.compute_per_race_quality(
-        all_generated_captions,
-        all_reference_captions,
-        all_race_labels
-    )
-    results['per_race_quality'] = per_race_results
-
-    if 'light' in per_race_results:
-        print(f"  Light skin - BLEU-4: {per_race_results['light']['BLEU-4']:.4f}")
-    if 'dark' in per_race_results:
-        print(f"  Dark skin - BLEU-4: {per_race_results['dark']['BLEU-4']:.4f}")
-    if 'bleu4_disparity' in per_race_results:
-        print(f"  Quality disparity: {per_race_results['bleu4_disparity']:.4f}")
-
-    # 5. Dataset statistics
-    light_count = np.sum(race_labels_array == 0)
-    dark_count = np.sum(race_labels_array == 1)
-    total = len(race_labels_array)
-
-    results['dataset_stats'] = {
+    results['statistics'] = {
+        '#light': light_count,
+        '#dark': dark_count,
+        'total': total,
         'light_ratio': light_count / total,
-        'dark_ratio': dark_count / total,
-        'light_count': int(light_count),
-        'dark_count': int(dark_count),
-        'total': total
+        'dark_ratio': dark_count / total
     }
 
-    print("\n5. Dataset Statistics")
-    print("-" * 60)
+    print(f"Dataset Statistics:")
     print(f"  Light samples: {light_count} ({light_count/total*100:.1f}%)")
-    print(f"  Dark samples: {dark_count} ({dark_count/total*100:.1f}%)")
+    print(f"  Dark samples:  {dark_count} ({dark_count/total*100:.1f}%)")
 
-    # 6. Bias amplification
-    bias_amp = bias_metrics.compute_bias_amplification(
-        encoder_adv_results['adversary_accuracy'],
-        {'light': light_count / total}
+    # 1. Dataset Leakage (λD)
+    dataset_leak = metrics.compute_dataset_leakage(
+        ground_truth_captions, race_labels, image_ids=image_ids
+    )
+    results['lambda_D'] = dataset_leak['lambda_D']
+
+    # 2. Model Leakage (λM)
+    model_leak = metrics.compute_model_leakage(
+        generated_captions, race_labels,
+        vectorizer=dataset_leak['vectorizer'], image_ids=image_ids
+    )
+    results['lambda_M'] = model_leak['lambda_M']
+
+    # 3. Compute model F1 score
+    from evaluation.caption_metrics import evaluate_captions
+    references = [[gt] for gt in ground_truth_captions]
+    caption_quality = evaluate_captions(generated_captions, references)
+    model_f1 = caption_quality['F1']
+    results['F1'] = model_f1
+    results['caption_quality'] = caption_quality
+
+    print(f"\nModel Caption Quality:")
+    print(f"  BLEU-4: {caption_quality['BLEU-4']:.4f}")
+    print(f"  F1:     {caption_quality['F1']:.4f}")
+
+    # 4. Dataset Leakage at F1 (λD(F1))
+    dataset_leak_f1 = metrics.compute_dataset_leakage_at_f1(
+        ground_truth_captions, references, race_labels,
+        model_f1, vocab, vectorizer=dataset_leak['vectorizer'], image_ids=image_ids
+    )
+    results['lambda_D_F1'] = dataset_leak_f1['lambda_D_F1']
+
+    # 5. Bias Amplification (Δ)
+    bias_amp = metrics.compute_bias_amplification(
+        results['lambda_M'], results['lambda_D_F1']
     )
     results['bias_amplification'] = bias_amp
-
-    print("\n6. Bias Amplification")
-    print("-" * 60)
-    print(f"  Amplification index: {bias_amp:.4f}")
 
     return results
 
 
-def print_bias_summary(results: Dict, title: str = "Bias Evaluation Summary"):
+def format_results_table(results: Dict, split_name: str = "baseline") -> str:
     """
-    Print comprehensive bias evaluation summary.
+    Format results to match paper's Table 1 format.
 
     Args:
-        results: Dictionary from evaluate_model_bias
-        title: Title to print
+        results: Results dictionary
+        split_name: Name of the split/model
+
+    Returns:
+        Formatted table string
     """
-    print("\n" + "="*80)
-    print(f"{title}")
-    print("="*80)
+    stats = results['statistics']
 
-    # Adversary results
-    print("\n📊 ADVERSARY PROBING (Higher = More Biased)")
-    print("-" * 80)
-    if 'encoder_adversary' in results:
-        acc = results['encoder_adversary']['adversary_accuracy']
-        status = "🔴 BIASED" if acc > 0.6 else "🟡 MODERATE" if acc > 0.55 else "🟢 DEBIASED"
-        print(f"  Encoder Features Adversary Accuracy: {acc:.4f} {status}")
+    table = []
+    table.append("=" * 100)
+    table.append("BIAS EVALUATION RESULTS (Paper Table 1 Format)")
+    table.append("=" * 100)
+    table.append("")
+    table.append(f"{'Split':<15} {'Statistics':<30} {'Leakage':<30} {'Performance':<20}")
+    table.append(f"{'':<15} {'#light':<10} {'#dark':<10} {'λD':<10} {'λM(F1)':<10} {'λD(F1)':<10} {'Δ':<10} {'F1':<10}")
+    table.append("-" * 100)
 
-    if 'decoder_adversary' in results:
-        acc = results['decoder_adversary']['adversary_accuracy']
-        status = "🔴 BIASED" if acc > 0.6 else "🟡 MODERATE" if acc > 0.55 else "🟢 DEBIASED"
-        print(f"  Decoder Features Adversary Accuracy: {acc:.4f} {status}")
+    row = f"{split_name:<15} "
+    row += f"{stats['#light']:<10} "
+    row += f"{stats['#dark']:<10} "
+    row += f"{results['lambda_D']:.4f}    "
+    row += f"{results['lambda_M']:.4f}    "
+    row += f"{results['lambda_D_F1']:.4f}    "
+    row += f"{results['bias_amplification']:+.4f}    "
+    row += f"{results['F1']:.4f}"
 
-    # Quality disparity
-    print("\n📏 FAIRNESS METRICS")
-    print("-" * 80)
-    if 'per_race_quality' in results:
-        pr = results['per_race_quality']
-        if 'light' in pr and 'dark' in pr:
-            print(f"  Light Skin BLEU-4: {pr['light']['BLEU-4']:.4f}")
-            print(f"  Dark Skin BLEU-4: {pr['dark']['BLEU-4']:.4f}")
-            if 'quality_gap' in pr:
-                gap = pr['quality_gap']
-                status = "🔴 UNFAIR" if abs(gap) > 0.02 else "🟢 FAIR"
-                print(f"  Quality Gap: {gap:+.4f} {status}")
+    table.append(row)
+    table.append("=" * 100)
+    table.append("")
+    table.append("INTERPRETATION:")
+    table.append(f"  λD      = Dataset Leakage (how predictable is race from ground truth captions)")
+    table.append(f"  λM(F1)  = Model Leakage (how predictable is race from generated captions)")
+    table.append(f"  λD(F1)  = Dataset Leakage at model's F1 (expected leakage by chance)")
+    table.append(f"  Δ       = Bias Amplification (λM - λD(F1))")
+    table.append("")
 
-    # Race words
-    print("\n📝 RACIAL DESCRIPTOR USAGE")
-    print("-" * 80)
-    if 'race_words' in results:
-        rw = results['race_words']
-        print(f"  Light Skin Captions: {rw['light_racial_word_freq']:.4f}")
-        print(f"  Dark Skin Captions: {rw['dark_racial_word_freq']:.4f}")
-        print(f"  Disparity: {rw['racial_word_disparity']:.4f}")
-
-    # Overall verdict
-    print("\n⚖️  OVERALL BIAS VERDICT")
-    print("-" * 80)
-
-    enc_acc = results.get('encoder_adversary', {}).get('adversary_accuracy', 0.5)
-
-    if enc_acc > 0.65:
-        verdict = "🔴 HIGHLY BIASED - Features strongly encode racial information"
-    elif enc_acc > 0.6:
-        verdict = "🟠 MODERATELY BIASED - Features contain racial signals"
-    elif enc_acc > 0.55:
-        verdict = "🟡 SLIGHTLY BIASED - Some racial leakage present"
+    if results['bias_amplification'] > 0.05:
+        table.append("⚠️  VERDICT: Model AMPLIFIES racial bias beyond what exists in the dataset")
+    elif results['bias_amplification'] > 0:
+        table.append("⚠️  VERDICT: Model shows moderate bias amplification")
     else:
-        verdict = "🟢 DEBIASED - Features are largely race-invariant"
+        table.append("✅ VERDICT: Model does not amplify bias")
 
-    print(f"  {verdict}")
-    print("="*80)
+    table.append("=" * 100)
+
+    return '\n'.join(table)
+
+
+# Backward compatibility - keep old functions but deprecated
+def print_bias_summary(title: str = "Bias Evaluation Summary"):
+    """Legacy function for backward compatibility."""
+    print(f"\n{title}")
+    print("Note: This is using the old (incorrect) methodology.")
+    print("Please use comprehensive_bias_evaluation() for paper-correct metrics.")
 
 
 if __name__ == '__main__':
-    # Test bias metrics
-    print("Testing Bias Metrics...\n")
+    print("Testing LeakageMetrics...")
 
     # Create dummy data
-    features = np.random.randn(100, 2048).astype(np.float32)
-    race_labels = np.random.randint(0, 2, size=100).astype(np.int32)
+    captions_gt = [
+        "a man playing tennis",
+        "a woman cooking food",
+        "a person riding bike",
+        "a man with dog"
+    ] * 25
 
-    bias_metrics = BiasMetrics()
+    captions_gen = [
+        "man with racket",
+        "woman in kitchen",
+        "person on bicycle",
+        "man and pet"
+    ] * 25
 
-    # Test adversary probing
-    print("Testing adversary probing...")
-    adv_results = bias_metrics.train_adversary_probe(
-        features, race_labels, input_dim=2048, epochs=5
+    race_labels = [0, 1, 0, 1] * 25  # 0=light, 1=dark
+
+    # Mock vocab
+    class MockVocab:
+        def __init__(self):
+            self.idx2word = {i: word for i, word in enumerate(
+                "a an the man woman person dog cat playing cooking riding".split()
+            )}
+
+        def __len__(self):
+            return len(self.idx2word)
+
+    vocab = MockVocab()
+
+    dataset_stats = {
+        'light_count': 50,
+        'dark_count': 50
+    }
+
+    results = comprehensive_bias_evaluation(
+        captions_gen, captions_gt, race_labels, vocab, dataset_stats
     )
 
-    print(f"\nAdversary Results: {adv_results}")
-
-    print("\n✅ Bias metrics test passed!")
+    print("\n" + format_results_table(results))

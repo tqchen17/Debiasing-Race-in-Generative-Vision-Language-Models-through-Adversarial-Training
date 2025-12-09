@@ -308,7 +308,7 @@ class BaselineTrainer:
             # Save best model
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                best_path = os.path.join(self.checkpoint_dir, 'best_model')
+                best_path = os.path.join(self.checkpoint_dir, 'best_model.weights.h5')
                 self.model.save_weights(best_path)
                 print(f"Saved best model (val_loss={val_loss:.4f})")
 

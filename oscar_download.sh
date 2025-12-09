@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=coco_download
-#SBATCH --time=4:00:00
+#SBATCH --time=20:00:00
 #SBATCH --mem=8G
 #SBATCH --cpus-per-task=4
 #SBATCH --output=download_%j.log
@@ -13,12 +13,8 @@ module load cuda/11.8.0
 # Set data directory to scratch space (has 512GB quota)
 export DATA_DIR=~/scratch/debiasing-project
 
-# Create directory
-mkdir -p $DATA_DIR
+# Navigate to project directory (assumes you already cloned repo here)
 cd $DATA_DIR
-
-# Copy code from home to scratch directory
-cp -r ~/Debiasing-Race-in-Generative-Vision-Language-Models-through-Adversarial-Training/* .
 
 # Activate virtual environment
 source .venv/bin/activate

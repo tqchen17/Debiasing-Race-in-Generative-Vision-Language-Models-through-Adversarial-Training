@@ -128,6 +128,9 @@ class CaptionMetrics:
         # Combine all metrics
         all_metrics = {**bleu_scores, **avg_rouge}
 
+        # Add F1 as alias for ROUGE-L (standard practice in caption evaluation)
+        all_metrics['F1'] = avg_rouge['ROUGE-L']
+
         return all_metrics
 
 
