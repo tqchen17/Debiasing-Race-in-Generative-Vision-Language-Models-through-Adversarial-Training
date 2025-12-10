@@ -11,10 +11,18 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root and src directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.dirname(script_dir)
+project_root = os.path.dirname(src_dir)
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
 from models.adv_model_dual import create_dual_adversarial_model, compute_dual_loss
-from data.dataset import create_dataset
-from utils.vocab import load_vocab
+from data.dataset import create_datasets
 import utils.config as config
 
 
@@ -408,30 +416,15 @@ def main():
     print("DUAL ADVERSARIAL DEBIASING TRAINING")
     print("="*70)
     
-    # Load vocabulary
-    print("\nLoading vocabulary...")
-    word_to_idx, idx_to_word = load_vocab(config.VOCAB_FILE)
-    vocab_size = len(word_to_idx)
-    print(f"Vocabulary size: {vocab_size}")
-    
-    # Create datasets
+    # Create datasets (includes vocabulary loading)
     print("\nCreating datasets...")
-    train_dataset = create_dataset(
-        csv_file=config.TRAIN_CSV,
+    train_dataset, val_dataset, vocab = create_datasets(
         batch_size=config.BATCH_SIZE,
-        vocab_file=config.VOCAB_FILE,
-        max_length=config.MAX_CAPTION_LENGTH,
-        is_training=True
+        balanced=False  # Use original data distribution for adversarial training
     )
-    
-    val_dataset = create_dataset(
-        csv_file=config.VAL_CSV,
-        batch_size=config.BATCH_SIZE,
-        vocab_file=config.VOCAB_FILE,
-        max_length=config.MAX_CAPTION_LENGTH,
-        is_training=False
-    )
-    
+
+    vocab_size = len(vocab)
+    print(f"Vocabulary size: {vocab_size}")
     print("Datasets created")
     
     # Create model

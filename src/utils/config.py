@@ -55,7 +55,7 @@ LAMBDA_D = 0.5  # Decoder adversary weight (tune: 0.3-1.0)
 
 # Training settings
 BATCH_SIZE = 32
-NUM_EPOCHS = 30
+NUM_EPOCHS = 80
 GRAD_CLIP = 5.0  # Gradient clipping threshold
 
 # ======================
@@ -81,6 +81,13 @@ CHECKPOINT_DIR = os.path.join(PROJECT_ROOT, 'checkpoints')
 LOG_DIR = os.path.join(PROJECT_ROOT, 'logs')
 RESULTS_DIR = os.path.join(PROJECT_ROOT, 'results')
 
+# Adversarial model directories
+DUAL_CHECKPOINT_DIR = os.path.join(PROJECT_ROOT, 'checkpoints', 'adversarial_dual')
+DUAL_LOG_DIR = os.path.join(PROJECT_ROOT, 'logs', 'adversarial_dual')
+
+# Temporal adversary setting
+USE_TEMPORAL_ADVERSARY = False  # Use temporal averaging for decoder adversary
+
 # Save frequency
 SAVE_EVERY_N_EPOCHS = 5
 LOG_EVERY_N_STEPS = 100
@@ -95,7 +102,7 @@ RACE_LABELS = {
 NUM_RACE_CLASSES = 2
 
 # Create directories if they don't exist
-for directory in [CHECKPOINT_DIR, LOG_DIR, RESULTS_DIR]:
+for directory in [CHECKPOINT_DIR, LOG_DIR, RESULTS_DIR, DUAL_CHECKPOINT_DIR, DUAL_LOG_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 

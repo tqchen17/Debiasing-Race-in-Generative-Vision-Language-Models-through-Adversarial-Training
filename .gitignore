@@ -16,6 +16,8 @@ images_val2014.csv
 logs/
 checkpoints/
 
+playground/
+
 # Model files
 *.h5
 *.pkl
