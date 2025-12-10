@@ -1,6 +1,5 @@
 """
-Comprehensive evaluation script for baseline model.
-Measures both caption quality AND bias metrics.
+Corrected evaluation script using paper-correct bias metrics.
 """
 
 import tensorflow as tf
@@ -14,38 +13,33 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.dataset import create_datasets
 from models.baseline_model import create_baseline_model
-from evaluation.caption_metrics import evaluate_captions, print_metrics
-from evaluation.bias_metrics import evaluate_model_bias, print_bias_summary
+from evaluation.caption_metrics import evaluate_captions
+from evaluation.bias_metrics import comprehensive_bias_evaluation, format_results_table
 from utils.vocab import Vocabulary
 import utils.config as config
 
 
-def evaluate_baseline(model, dataset, vocab, num_batches=None, adversary_epochs=20):
+def evaluate_baseline(model, dataset, vocab, num_batches=None):
     """
-    Comprehensive evaluation: Caption quality + Bias metrics.
+    Evaluate baseline model using CORRECTED paper methodology.
 
     Args:
         model: Trained baseline model
         dataset: Evaluation dataset
         vocab: Vocabulary
         num_batches: Number of batches to evaluate (None = all)
-        adversary_epochs: Epochs to train adversary probe
 
     Returns:
         Dictionary with all results
     """
     print("\n" + "=" * 80)
-    print("COMPREHENSIVE BASELINE EVALUATION")
+    print("BASELINE EVALUATION (CORRECTED METHODOLOGY)")
     print("=" * 80)
 
-    results = {}
-
-    # Collect all predictions
+    # Collect data
     all_generated = []
-    all_references = []
+    all_ground_truth = []
     all_race_labels = []
-    all_encoder_features = []
-    all_decoder_hiddens = []
 
     print("\nGenerating captions...")
 
@@ -54,18 +48,6 @@ def evaluate_baseline(model, dataset, vocab, num_batches=None, adversary_epochs=
         images = batch['image']
         captions = batch['caption']
         race_labels = batch['race_label']
-
-        # Forward pass to get features
-        predictions, encoder_features, decoder_hiddens = model(
-            images, captions, training=False
-        )
-
-        # Store features for bias evaluation
-        all_encoder_features.append(encoder_features.numpy())
-
-        # Average decoder hiddens across timesteps
-        decoder_avg = tf.reduce_mean(decoder_hiddens, axis=1)
-        all_decoder_hiddens.append(decoder_avg.numpy())
 
         # Generate captions
         for i in range(len(images)):
@@ -81,10 +63,10 @@ def evaluate_baseline(model, dataset, vocab, num_batches=None, adversary_epochs=
 
             # Decode
             generated_text = vocab.decode(generated_ids)
-            reference_text = vocab.decode(captions[i].numpy())
+            ground_truth_text = vocab.decode(captions[i].numpy())
 
             all_generated.append(generated_text)
-            all_references.append([reference_text])
+            all_ground_truth.append(ground_truth_text)
 
         all_race_labels.extend(race_labels.numpy().tolist())
 
@@ -97,121 +79,60 @@ def evaluate_baseline(model, dataset, vocab, num_batches=None, adversary_epochs=
 
     print(f"\nTotal samples evaluated: {len(all_generated)}")
 
-    # Concatenate features
-    encoder_features = np.concatenate(all_encoder_features, axis=0)
-    decoder_features = np.concatenate(all_decoder_hiddens, axis=0)
-    race_labels = np.array(all_race_labels)
+    # Dataset statistics
+    race_labels_array = np.array(all_race_labels)
+    light_count = np.sum(race_labels_array == 0)
+    dark_count = np.sum(race_labels_array == 1)
 
-    # ==========================================
-    # 1. CAPTION QUALITY METRICS
-    # ==========================================
-    print("\n" + "=" * 80)
-    print("1. CAPTION QUALITY EVALUATION")
-    print("=" * 80)
-
-    caption_results = evaluate_captions(all_generated, all_references)
-    print_metrics(caption_results, "Caption Quality Metrics")
-
-    results['caption_quality'] = caption_results
-
-    # ==========================================
-    # 2. BIAS METRICS
-    # ==========================================
-    print("\n" + "=" * 80)
-    print("2. BIAS EVALUATION")
-    print("=" * 80)
-
-    from evaluation.bias_metrics import BiasMetrics
-
-    bias_metrics = BiasMetrics()
-
-    # 2a. Adversary probing on encoder
-    print("\n2a. Encoder Adversary Probing")
-    print("-" * 80)
-    encoder_adv_results = bias_metrics.train_adversary_probe(
-        encoder_features,
-        race_labels,
-        input_dim=encoder_features.shape[1],
-        epochs=adversary_epochs
-    )
-    results['encoder_adversary'] = encoder_adv_results
-
-    # 2b. Adversary probing on decoder
-    print("\n2b. Decoder Adversary Probing")
-    print("-" * 80)
-    decoder_adv_results = bias_metrics.train_adversary_probe(
-        decoder_features,
-        race_labels,
-        input_dim=decoder_features.shape[1],
-        epochs=adversary_epochs
-    )
-    results['decoder_adversary'] = decoder_adv_results
-
-    # 2c. Racial word frequency
-    print("\n2c. Racial Descriptor Analysis")
-    print("-" * 80)
-    race_word_results = bias_metrics.compute_race_word_frequency(
-        all_generated,
-        all_race_labels
-    )
-    results['race_words'] = race_word_results
-
-    print(f"  Light captions - racial word freq: {race_word_results['light_racial_word_freq']:.4f}")
-    print(f"  Dark captions - racial word freq: {race_word_results['dark_racial_word_freq']:.4f}")
-    print(f"  Disparity: {race_word_results['racial_word_disparity']:.4f}")
-
-    # 2d. Per-race caption quality
-    print("\n2d. Per-Race Caption Quality")
-    print("-" * 80)
-    per_race_results = bias_metrics.compute_per_race_quality(
-        all_generated,
-        all_references,
-        all_race_labels
-    )
-    results['per_race_quality'] = per_race_results
-
-    if 'light' in per_race_results:
-        print(f"  Light - BLEU-4: {per_race_results['light']['BLEU-4']:.4f} "
-              f"({per_race_results['light_count']} samples)")
-    if 'dark' in per_race_results:
-        print(f"  Dark - BLEU-4: {per_race_results['dark']['BLEU-4']:.4f} "
-              f"({per_race_results['dark_count']} samples)")
-    if 'bleu4_disparity' in per_race_results:
-        print(f"  Quality disparity: {per_race_results['bleu4_disparity']:.4f}")
-
-    # 2e. Dataset statistics
-    light_count = np.sum(race_labels == 0)
-    dark_count = np.sum(race_labels == 1)
-    total = len(race_labels)
-
-    results['dataset_stats'] = {
-        'light_ratio': float(light_count / total),
-        'dark_ratio': float(dark_count / total),
+    dataset_stats = {
         'light_count': int(light_count),
-        'dark_count': int(dark_count),
-        'total': int(total)
+        'dark_count': int(dark_count)
     }
 
-    print("\n2e. Dataset Statistics")
-    print("-" * 80)
-    print(f"  Light samples: {light_count} ({light_count/total*100:.1f}%)")
-    print(f"  Dark samples: {dark_count} ({dark_count/total*100:.1f}%)")
-
-    # 2f. Bias amplification
-    bias_amp = bias_metrics.compute_bias_amplification(
-        encoder_adv_results['adversary_accuracy'],
-        {'light': light_count / total}
+    # Run comprehensive bias evaluation using paper methodology
+    results = comprehensive_bias_evaluation(
+        generated_captions=all_generated,
+        ground_truth_captions=all_ground_truth,
+        race_labels=all_race_labels,
+        vocab=vocab,
+        dataset_stats=dataset_stats
     )
-    results['bias_amplification'] = float(bias_amp)
 
-    print("\n2f. Bias Amplification")
-    print("-" * 80)
-    print(f"  Amplification index: {bias_amp:.4f}")
+    # Add per-race quality analysis
+    print(f"\n{'='*80}")
+    print("PER-RACE CAPTION QUALITY")
+    print(f"{'='*80}")
 
-    # ==========================================
-    # SUMMARY
-    # ==========================================
-    print_bias_summary(results, "BASELINE MODEL - BIAS EVALUATION SUMMARY")
+    light_gen = [cap for cap, race in zip(all_generated, all_race_labels) if race == 0]
+    light_ref = [[gt] for gt, race in zip(all_ground_truth, all_race_labels) if race == 0]
+
+    dark_gen = [cap for cap, race in zip(all_generated, all_race_labels) if race == 1]
+    dark_ref = [[gt] for gt, race in zip(all_ground_truth, all_race_labels) if race == 1]
+
+    if len(light_gen) > 0:
+        light_metrics = evaluate_captions(light_gen, light_ref)
+        results['light_quality'] = light_metrics
+        print(f"\nLight skin samples ({len(light_gen)}):")
+        print(f"  BLEU-4: {light_metrics['BLEU-4']:.4f}")
+        print(f"  F1:     {light_metrics['F1']:.4f}")
+
+    if len(dark_gen) > 0:
+        dark_metrics = evaluate_captions(dark_gen, dark_ref)
+        results['dark_quality'] = dark_metrics
+        print(f"\nDark skin samples ({len(dark_gen)}):")
+        print(f"  BLEU-4: {dark_metrics['BLEU-4']:.4f}")
+        print(f"  F1:     {dark_metrics['F1']:.4f}")
+
+    if len(light_gen) > 0 and len(dark_gen) > 0:
+        bleu4_gap = light_metrics['BLEU-4'] - dark_metrics['BLEU-4']
+        f1_gap = light_metrics['F1'] - dark_metrics['F1']
+        results['quality_gaps'] = {
+            'bleu4_gap': float(bleu4_gap),
+            'f1_gap': float(f1_gap)
+        }
+        print(f"\nQuality Gaps:")
+        print(f"  BLEU-4 Gap: {bleu4_gap:+.4f} {'(favors light)' if bleu4_gap > 0 else '(favors dark)'}")
+        print(f"  F1 Gap:     {f1_gap:+.4f} {'(favors light)' if f1_gap > 0 else '(favors dark)'}")
 
     return results
 
@@ -227,7 +148,9 @@ def save_results(results, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = os.path.join(output_dir, f'baseline_eval_{timestamp}.json')
+
+    # Save JSON
+    output_file = os.path.join(output_dir, f'baseline_eval_corrected_{timestamp}.json')
 
     # Convert numpy types to Python types for JSON serialization
     def convert_types(obj):
@@ -250,48 +173,56 @@ def save_results(results, output_dir):
 
     print(f"\nResults saved to: {output_file}")
 
-    # Also save a summary
-    summary_file = os.path.join(output_dir, f'baseline_summary_{timestamp}.txt')
-    with open(summary_file, 'w') as f:
-        f.write("BASELINE MODEL EVALUATION SUMMARY\n")
-        f.write("=" * 80 + "\n\n")
+    # Save formatted table
+    table_file = os.path.join(output_dir, f'baseline_table_corrected_{timestamp}.txt')
+    table_str = format_results_table(results, split_name="baseline")
 
-        f.write("CAPTION QUALITY:\n")
-        f.write("-" * 80 + "\n")
-        for key, value in results['caption_quality'].items():
-            f.write(f"  {key}: {value:.4f}\n")
+    with open(table_file, 'w') as f:
+        f.write(table_str)
+        f.write("\n\n")
 
-        f.write("\nBIAS METRICS:\n")
-        f.write("-" * 80 + "\n")
-        f.write(f"  Encoder Adversary Accuracy: {results['encoder_adversary']['adversary_accuracy']:.4f}\n")
-        f.write(f"  Decoder Adversary Accuracy: {results['decoder_adversary']['adversary_accuracy']:.4f}\n")
+        # Add detailed metrics
+        f.write("="*100 + "\n")
+        f.write("DETAILED CAPTION QUALITY METRICS\n")
+        f.write("="*100 + "\n\n")
 
-        if 'per_race_quality' in results:
-            pr = results['per_race_quality']
-            if 'light' in pr and 'dark' in pr:
-                f.write(f"  Light BLEU-4: {pr['light']['BLEU-4']:.4f}\n")
-                f.write(f"  Dark BLEU-4: {pr['dark']['BLEU-4']:.4f}\n")
-                if 'quality_gap' in pr:
-                    f.write(f"  Quality Gap: {pr['quality_gap']:+.4f}\n")
+        if 'caption_quality' in results:
+            f.write("Overall:\n")
+            for key, value in results['caption_quality'].items():
+                f.write(f"  {key}: {value:.4f}\n")
 
-        f.write(f"\n  Bias Amplification: {results['bias_amplification']:.4f}\n")
+        if 'light_quality' in results:
+            f.write("\nLight skin:\n")
+            for key, value in results['light_quality'].items():
+                f.write(f"  {key}: {value:.4f}\n")
 
-    print(f"Summary saved to: {summary_file}")
+        if 'dark_quality' in results:
+            f.write("\nDark skin:\n")
+            for key, value in results['dark_quality'].items():
+                f.write(f"  {key}: {value:.4f}\n")
+
+        if 'quality_gaps' in results:
+            f.write("\nQuality Gaps:\n")
+            for key, value in results['quality_gaps'].items():
+                f.write(f"  {key}: {value:+.4f}\n")
+
+    print(f"Table saved to: {table_file}")
+
+    # Also print to console
+    print("\n" + table_str)
 
 
 def main():
     """Main evaluation function."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Evaluate baseline model')
+    parser = argparse.ArgumentParser(description='Evaluate baseline model (CORRECTED)')
     parser.add_argument('--checkpoint', type=str, required=True,
                        help='Path to model checkpoint or weights')
     parser.add_argument('--batch_size', type=int, default=16,
                        help='Batch size for evaluation')
     parser.add_argument('--num_batches', type=int, default=None,
                        help='Number of batches to evaluate (None = all)')
-    parser.add_argument('--adversary_epochs', type=int, default=20,
-                       help='Epochs to train adversary probes')
     parser.add_argument('--output_dir', type=str, default=None,
                        help='Output directory for results')
     parser.add_argument('--use_val', action='store_true',
@@ -319,9 +250,15 @@ def main():
     print("\nCreating model...")
     model = create_baseline_model(vocab_size=len(vocab), finetune_encoder=False)
 
+    # Build model by calling it on a dummy batch
+    print("Building model...")
+    dummy_batch = next(iter(dataset))
+    _ = model(dummy_batch['image'], dummy_batch['caption'], training=False)
+    print("Model built successfully!")
+
     # Load weights
     print(f"Loading weights from {args.checkpoint}...")
-    model.load_weights(args.checkpoint).expect_partial()
+    model.load_weights(args.checkpoint)
     print("Weights loaded successfully!")
 
     # Evaluate
@@ -329,8 +266,7 @@ def main():
         model=model,
         dataset=dataset,
         vocab=vocab,
-        num_batches=args.num_batches,
-        adversary_epochs=args.adversary_epochs
+        num_batches=args.num_batches
     )
 
     # Save results

@@ -38,16 +38,27 @@ def set_fiftyone_dir(path):
 
 def main():
     print("Step 1: Downloading COCO-2017 Raw Files...")
-    
-    os.makedirs(LOCAL_FIFTYONE_ROOT, exist_ok=True)
-    
-    # Use the context manager to force the download location
-    with set_fiftyone_dir(LOCAL_FIFTYONE_ROOT):
-        foz.download_zoo_dataset(
-            "coco-2017",
-            splits=["train", "validation"],
-            max_samples=None, 
-        )
+
+    # Check if data already exists to avoid re-downloading
+    coco_train_dir = os.path.join(COCO_DOWNLOAD_DIR, "train", "data")
+    coco_val_dir = os.path.join(COCO_DOWNLOAD_DIR, "validation", "data")
+
+    if os.path.exists(coco_train_dir) and os.path.exists(coco_val_dir):
+        print(f"COCO data already exists at {COCO_DOWNLOAD_DIR}")
+        print("Skipping download. Delete the directory to re-download.")
+    else:
+        print(f"Downloading COCO-2017 to {LOCAL_FIFTYONE_ROOT}")
+        print("This may take 2-3 hours for ~20GB of data...")
+        os.makedirs(LOCAL_FIFTYONE_ROOT, exist_ok=True)
+
+        # Use the context manager to force the download location
+        with set_fiftyone_dir(LOCAL_FIFTYONE_ROOT):
+            foz.download_zoo_dataset(
+                "coco-2017",
+                splits=["train", "validation"],
+                max_samples=None,
+            )
+        print("Download complete!")
     
     # 2. Path construction now uses the fixed, local directory
     coco_dir = COCO_DOWNLOAD_DIR 

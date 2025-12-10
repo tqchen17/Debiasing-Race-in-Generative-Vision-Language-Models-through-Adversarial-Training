@@ -9,13 +9,12 @@ __pycache__/
 # Data files (too large for git)
 MASTER_TRAIN.csv
 MASTER_VAL.csv
-data/
+fiftyone/
 images_val2014.csv
 
 # Training outputs
 logs/
 checkpoints/
-results/
 
 # Model files
 *.h5

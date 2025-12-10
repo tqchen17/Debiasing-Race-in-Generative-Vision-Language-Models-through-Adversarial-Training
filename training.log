@@ -1,0 +1,692 @@
+## SLURM PROLOG ###############################################################
+##    Job ID : 14748253
+##  Job Name : baseline_train
+##  Nodelist : gpu2004
+##      CPUs : 
+##  Mem/Node : 32768 MB
+## Directory : /oscar/scratch/kvesesso/debiasing-project
+##   Job Started : Mon Dec  8 07:32:47 PM EST 2025
+###############################################################################
+GPUs Available: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+Starting training...
+Working directory: /users/kvesesso/scratch/debiasing-project
+CUDA_VISIBLE_DEVICES: 0
+Loading datasets...
+Loading vocabulary from /oscar/scratch/kvesesso/debiasing-project/vocab.pkl
+Vocabulary loaded from /oscar/scratch/kvesesso/debiasing-project/vocab.pkl
+Vocabulary size: 2832
+
+Creating training dataset from /oscar/scratch/kvesesso/debiasing-project/MASTER_TRAIN.csv
+Loaded 48081 samples from /oscar/scratch/kvesesso/debiasing-project/MASTER_TRAIN.csv
+Race distribution: Light=43302, Dark=4779
+
+Creating validation dataset from /oscar/scratch/kvesesso/debiasing-project/MASTER_VAL.csv
+Loaded 6805 samples from /oscar/scratch/kvesesso/debiasing-project/MASTER_VAL.csv
+Race distribution: Light=6099, Dark=706
+
+Creating model...
+ImageEncoder initialized:
+  Base model: ResNet50
+  Output dim: 2048
+  Trainable: False
+  Total params: 23,587,712
+CaptionDecoder initialized:
+  Vocab size: 2832
+  Embedding dim: 300
+  Decoder dim: 512
+  Attention dim: 512
+  Dropout: 0.5
+
+BaselineModel initialized:
+  Encoder: ResNet50 (trainable=False)
+  Decoder: LSTM with attention
+  Vocab size: 2832
+
+Initializing trainer...
+Trainer initialized:
+  Checkpoint dir: /users/kvesesso/scratch/debiasing-project/checkpoints
+  TensorBoard log dir: /users/kvesesso/scratch/debiasing-project/logs
+  Learning rate: 0.001
+
+Starting training...
+
+================================================================================
+BASELINE MODEL TRAINING
+================================================================================
+Epochs: 20
+Batch size: 32
+Learning rate: 0.001
+Vocab size: 2832
+================================================================================
+
+
+================================================================================
+Epoch 1/20
+================================================================================
+  Batch 100: Loss = 5.2364
+  Batch 200: Loss = 5.0132
+  Batch 300: Loss = 4.8539
+  Batch 400: Loss = 4.7196
+  Batch 500: Loss = 4.6133
+  Batch 600: Loss = 4.5181
+  Batch 700: Loss = 4.4421
+  Batch 800: Loss = 4.3806
+  Batch 900: Loss = 4.3272
+  Batch 1000: Loss = 4.2803
+  Batch 1100: Loss = 4.2392
+  Batch 1200: Loss = 4.2025
+  Batch 1300: Loss = 4.1701
+  Batch 1400: Loss = 4.1383
+  Batch 1500: Loss = 4.1122
+
+Epoch 1 Training:
+  Loss: 4.1116
+  Time: 134.81s
+Epoch 1 Validation:
+  Loss: 3.5375
+Saved best model (val_loss=3.5375)
+
+================================================================================
+Epoch 2/20
+================================================================================
+  Batch 100: Loss = 3.7127
+  Batch 200: Loss = 3.6919
+  Batch 300: Loss = 3.6846
+  Batch 400: Loss = 3.6755
+  Batch 500: Loss = 3.6663
+  Batch 600: Loss = 3.6509
+  Batch 700: Loss = 3.6357
+  Batch 800: Loss = 3.6268
+  Batch 900: Loss = 3.6169
+  Batch 1000: Loss = 3.6072
+  Batch 1100: Loss = 3.5991
+  Batch 1200: Loss = 3.5891
+  Batch 1300: Loss = 3.5823
+  Batch 1400: Loss = 3.5744
+  Batch 1500: Loss = 3.5685
+
+Epoch 2 Training:
+  Loss: 3.5683
+  Time: 109.86s
+Epoch 2 Validation:
+  Loss: 3.2632
+Saved best model (val_loss=3.2632)
+
+================================================================================
+Epoch 3/20
+================================================================================
+  Batch 100: Loss = 3.4664
+  Batch 200: Loss = 3.4598
+  Batch 300: Loss = 3.4569
+  Batch 400: Loss = 3.4551
+  Batch 500: Loss = 3.4480
+  Batch 600: Loss = 3.4338
+  Batch 700: Loss = 3.4239
+  Batch 800: Loss = 3.4193
+  Batch 900: Loss = 3.4130
+  Batch 1000: Loss = 3.4061
+  Batch 1100: Loss = 3.4012
+  Batch 1200: Loss = 3.3949
+  Batch 1300: Loss = 3.3894
+  Batch 1400: Loss = 3.3846
+  Batch 1500: Loss = 3.3827
+
+Epoch 3 Training:
+  Loss: 3.3823
+  Time: 110.22s
+Epoch 3 Validation:
+  Loss: 3.1265
+Saved best model (val_loss=3.1265)
+
+================================================================================
+Epoch 4/20
+================================================================================
+  Batch 100: Loss = 3.3237
+  Batch 200: Loss = 3.3220
+  Batch 300: Loss = 3.3174
+  Batch 400: Loss = 3.3174
+  Batch 500: Loss = 3.3135
+  Batch 600: Loss = 3.3057
+  Batch 700: Loss = 3.2953
+  Batch 800: Loss = 3.2924
+  Batch 900: Loss = 3.2895
+  Batch 1000: Loss = 3.2854
+  Batch 1100: Loss = 3.2811
+  Batch 1200: Loss = 3.2768
+  Batch 1300: Loss = 3.2743
+  Batch 1400: Loss = 3.2716
+  Batch 1500: Loss = 3.2693
+
+Epoch 4 Training:
+  Loss: 3.2694
+  Time: 110.20s
+Epoch 4 Validation:
+  Loss: 3.0409
+Saved best model (val_loss=3.0409)
+
+================================================================================
+Epoch 5/20
+================================================================================
+  Batch 100: Loss = 3.2315
+  Batch 200: Loss = 3.2311
+  Batch 300: Loss = 3.2352
+  Batch 400: Loss = 3.2320
+  Batch 500: Loss = 3.2325
+  Batch 600: Loss = 3.2265
+  Batch 700: Loss = 3.2181
+  Batch 800: Loss = 3.2172
+  Batch 900: Loss = 3.2133
+  Batch 1000: Loss = 3.2105
+  Batch 1100: Loss = 3.2060
+  Batch 1200: Loss = 3.2025
+  Batch 1300: Loss = 3.2001
+  Batch 1400: Loss = 3.1987
+  Batch 1500: Loss = 3.1976
+
+Epoch 5 Training:
+  Loss: 3.1974
+  Time: 110.34s
+Epoch 5 Validation:
+  Loss: 2.9923
+
+Sample Captions (Epoch 5):
+--------------------------------------------------------------------------------
+
+1. Race: Light
+   Generated: a man is skiing down a snow
+   Reference: a woman posing for the camera standing on skis
+
+2. Race: Light
+   Generated: a man is skiing down a snow
+   Reference: a woman standing on skiis while posing for the camera
+
+3. Race: Light
+   Generated: a man is skiing down a snow
+   Reference: a woman in a red jacket skiing down a slope
+
+4. Race: Light
+   Generated: a man is skiing down a snow
+   Reference: a young woman is skiing down the mountain slope
+
+5. Race: Light
+   Generated: a man is skiing down a snow
+   Reference: a person on skis makes her way through the snow
+--------------------------------------------------------------------------------
+
+Saved checkpoint: /users/kvesesso/scratch/debiasing-project/checkpoints/ckpt-1
+Saved best model (val_loss=2.9923)
+
+================================================================================
+Epoch 6/20
+================================================================================
+  Batch 100: Loss = 3.1706
+  Batch 200: Loss = 3.1762
+  Batch 300: Loss = 3.1813
+  Batch 400: Loss = 3.1795
+  Batch 500: Loss = 3.1750
+  Batch 600: Loss = 3.1702
+  Batch 700: Loss = 3.1620
+  Batch 800: Loss = 3.1645
+  Batch 900: Loss = 3.1596
+  Batch 1000: Loss = 3.1549
+  Batch 1100: Loss = 3.1542
+  Batch 1200: Loss = 3.1514
+  Batch 1300: Loss = 3.1497
+  Batch 1400: Loss = 3.1466
+  Batch 1500: Loss = 3.1462
+
+Epoch 6 Training:
+  Loss: 3.1460
+  Time: 110.14s
+Epoch 6 Validation:
+  Loss: 2.9487
+Saved best model (val_loss=2.9487)
+
+================================================================================
+Epoch 7/20
+================================================================================
+  Batch 100: Loss = 3.1314
+  Batch 200: Loss = 3.1280
+  Batch 300: Loss = 3.1354
+  Batch 400: Loss = 3.1309
+  Batch 500: Loss = 3.1314
+  Batch 600: Loss = 3.1289
+  Batch 700: Loss = 3.1182
+  Batch 800: Loss = 3.1181
+  Batch 900: Loss = 3.1170
+  Batch 1000: Loss = 3.1133
+  Batch 1100: Loss = 3.1111
+  Batch 1200: Loss = 3.1080
+  Batch 1300: Loss = 3.1071
+  Batch 1400: Loss = 3.1040
+  Batch 1500: Loss = 3.1050
+
+Epoch 7 Training:
+  Loss: 3.1049
+  Time: 110.31s
+Epoch 7 Validation:
+  Loss: 2.9253
+Saved best model (val_loss=2.9253)
+
+================================================================================
+Epoch 8/20
+================================================================================
+  Batch 100: Loss = 3.0979
+  Batch 200: Loss = 3.0955
+  Batch 300: Loss = 3.0980
+  Batch 400: Loss = 3.1011
+  Batch 500: Loss = 3.0974
+  Batch 600: Loss = 3.0889
+  Batch 700: Loss = 3.0791
+  Batch 800: Loss = 3.0815
+  Batch 900: Loss = 3.0800
+  Batch 1000: Loss = 3.0750
+  Batch 1100: Loss = 3.0740
+  Batch 1200: Loss = 3.0709
+  Batch 1300: Loss = 3.0679
+  Batch 1400: Loss = 3.0661
+  Batch 1500: Loss = 3.0671
+
+Epoch 8 Training:
+  Loss: 3.0669
+  Time: 110.27s
+Epoch 8 Validation:
+  Loss: 2.8947
+Saved best model (val_loss=2.8947)
+
+================================================================================
+Epoch 9/20
+================================================================================
+  Batch 100: Loss = 3.0515
+  Batch 200: Loss = 3.0646
+  Batch 300: Loss = 3.0693
+  Batch 400: Loss = 3.0678
+  Batch 500: Loss = 3.0647
+  Batch 600: Loss = 3.0595
+  Batch 700: Loss = 3.0510
+  Batch 800: Loss = 3.0530
+  Batch 900: Loss = 3.0498
+  Batch 1000: Loss = 3.0488
+  Batch 1100: Loss = 3.0452
+  Batch 1200: Loss = 3.0423
+  Batch 1300: Loss = 3.0411
+  Batch 1400: Loss = 3.0403
+  Batch 1500: Loss = 3.0402
+
+Epoch 9 Training:
+  Loss: 3.0401
+  Time: 110.33s
+Epoch 9 Validation:
+  Loss: 2.8681
+Saved best model (val_loss=2.8681)
+
+================================================================================
+Epoch 10/20
+================================================================================
+  Batch 100: Loss = 3.0492
+  Batch 200: Loss = 3.0342
+  Batch 300: Loss = 3.0439
+  Batch 400: Loss = 3.0443
+  Batch 500: Loss = 3.0412
+  Batch 600: Loss = 3.0361
+  Batch 700: Loss = 3.0295
+  Batch 800: Loss = 3.0260
+  Batch 900: Loss = 3.0271
+  Batch 1000: Loss = 3.0225
+  Batch 1100: Loss = 3.0213
+  Batch 1200: Loss = 3.0199
+  Batch 1300: Loss = 3.0183
+  Batch 1400: Loss = 3.0174
+  Batch 1500: Loss = 3.0178
+
+Epoch 10 Training:
+  Loss: 3.0178
+  Time: 110.35s
+Epoch 10 Validation:
+  Loss: 2.8677
+
+Sample Captions (Epoch 10):
+--------------------------------------------------------------------------------
+
+1. Race: Light
+   Generated: a man is skiing on a snow covered slope
+   Reference: a woman posing for the camera standing on skis
+
+2. Race: Light
+   Generated: a man is skiing on a snow covered slope
+   Reference: a woman standing on skiis while posing for the camera
+
+3. Race: Light
+   Generated: a man is skiing on a snow covered slope
+   Reference: a woman in a red jacket skiing down a slope
+
+4. Race: Light
+   Generated: a man is skiing on a snow covered slope
+   Reference: a young woman is skiing down the mountain slope
+
+5. Race: Light
+   Generated: a man is skiing on a snow covered slope
+   Reference: a person on skis makes her way through the snow
+--------------------------------------------------------------------------------
+
+Saved checkpoint: /users/kvesesso/scratch/debiasing-project/checkpoints/ckpt-2
+Saved best model (val_loss=2.8677)
+
+================================================================================
+Epoch 11/20
+================================================================================
+  Batch 100: Loss = 3.0101
+  Batch 200: Loss = 3.0123
+  Batch 300: Loss = 3.0146
+  Batch 400: Loss = 3.0162
+  Batch 500: Loss = 3.0172
+  Batch 600: Loss = 3.0105
+  Batch 700: Loss = 3.0056
+  Batch 800: Loss = 3.0055
+  Batch 900: Loss = 3.0034
+  Batch 1000: Loss = 3.0015
+  Batch 1100: Loss = 2.9994
+  Batch 1200: Loss = 2.9974
+  Batch 1300: Loss = 2.9953
+  Batch 1400: Loss = 2.9942
+  Batch 1500: Loss = 2.9945
+
+Epoch 11 Training:
+  Loss: 2.9944
+  Time: 110.26s
+Epoch 11 Validation:
+  Loss: 2.8492
+Saved best model (val_loss=2.8492)
+
+================================================================================
+Epoch 12/20
+================================================================================
+  Batch 100: Loss = 2.9909
+  Batch 200: Loss = 2.9931
+  Batch 300: Loss = 2.9941
+  Batch 400: Loss = 2.9910
+  Batch 500: Loss = 2.9917
+  Batch 600: Loss = 2.9874
+  Batch 700: Loss = 2.9821
+  Batch 800: Loss = 2.9834
+  Batch 900: Loss = 2.9809
+  Batch 1000: Loss = 2.9788
+  Batch 1100: Loss = 2.9772
+  Batch 1200: Loss = 2.9743
+  Batch 1300: Loss = 2.9731
+  Batch 1400: Loss = 2.9716
+  Batch 1500: Loss = 2.9730
+
+Epoch 12 Training:
+  Loss: 2.9727
+  Time: 110.36s
+Epoch 12 Validation:
+  Loss: 2.8263
+Saved best model (val_loss=2.8263)
+
+================================================================================
+Epoch 13/20
+================================================================================
+  Batch 100: Loss = 2.9833
+  Batch 200: Loss = 2.9742
+  Batch 300: Loss = 2.9774
+  Batch 400: Loss = 2.9748
+  Batch 500: Loss = 2.9740
+  Batch 600: Loss = 2.9720
+  Batch 700: Loss = 2.9658
+  Batch 800: Loss = 2.9643
+  Batch 900: Loss = 2.9628
+  Batch 1000: Loss = 2.9611
+  Batch 1100: Loss = 2.9609
+  Batch 1200: Loss = 2.9590
+  Batch 1300: Loss = 2.9582
+  Batch 1400: Loss = 2.9583
+  Batch 1500: Loss = 2.9584
+
+Epoch 13 Training:
+  Loss: 2.9586
+  Time: 110.24s
+Epoch 13 Validation:
+  Loss: 2.8257
+Saved best model (val_loss=2.8257)
+
+================================================================================
+Epoch 14/20
+================================================================================
+  Batch 100: Loss = 2.9690
+  Batch 200: Loss = 2.9625
+  Batch 300: Loss = 2.9656
+  Batch 400: Loss = 2.9684
+  Batch 500: Loss = 2.9697
+  Batch 600: Loss = 2.9605
+  Batch 700: Loss = 2.9565
+  Batch 800: Loss = 2.9537
+  Batch 900: Loss = 2.9532
+  Batch 1000: Loss = 2.9487
+  Batch 1100: Loss = 2.9491
+  Batch 1200: Loss = 2.9455
+  Batch 1300: Loss = 2.9444
+  Batch 1400: Loss = 2.9429
+  Batch 1500: Loss = 2.9438
+
+Epoch 14 Training:
+  Loss: 2.9439
+  Time: 110.26s
+Epoch 14 Validation:
+  Loss: 2.8134
+Saved best model (val_loss=2.8134)
+
+================================================================================
+Epoch 15/20
+================================================================================
+  Batch 100: Loss = 2.9408
+  Batch 200: Loss = 2.9467
+  Batch 300: Loss = 2.9517
+  Batch 400: Loss = 2.9553
+  Batch 500: Loss = 2.9546
+  Batch 600: Loss = 2.9489
+  Batch 700: Loss = 2.9428
+  Batch 800: Loss = 2.9448
+  Batch 900: Loss = 2.9424
+  Batch 1000: Loss = 2.9402
+  Batch 1100: Loss = 2.9388
+  Batch 1200: Loss = 2.9362
+  Batch 1300: Loss = 2.9365
+  Batch 1400: Loss = 2.9345
+  Batch 1500: Loss = 2.9353
+
+Epoch 15 Training:
+  Loss: 2.9356
+  Time: 110.19s
+Epoch 15 Validation:
+  Loss: 2.8049
+
+Sample Captions (Epoch 15):
+--------------------------------------------------------------------------------
+
+1. Race: Light
+   Generated: a man is skiing down a snowy slope
+   Reference: a woman posing for the camera standing on skis
+
+2. Race: Light
+   Generated: a man is skiing down a snowy slope
+   Reference: a woman standing on skiis while posing for the camera
+
+3. Race: Light
+   Generated: a man is skiing down a snowy slope
+   Reference: a woman in a red jacket skiing down a slope
+
+4. Race: Light
+   Generated: a man is skiing down a snowy slope
+   Reference: a young woman is skiing down the mountain slope
+
+5. Race: Light
+   Generated: a man is skiing down a snowy slope
+   Reference: a person on skis makes her way through the snow
+--------------------------------------------------------------------------------
+
+Saved checkpoint: /users/kvesesso/scratch/debiasing-project/checkpoints/ckpt-3
+Saved best model (val_loss=2.8049)
+
+================================================================================
+Epoch 16/20
+================================================================================
+  Batch 100: Loss = 2.9232
+  Batch 200: Loss = 2.9315
+  Batch 300: Loss = 2.9388
+  Batch 400: Loss = 2.9442
+  Batch 500: Loss = 2.9418
+  Batch 600: Loss = 2.9364
+  Batch 700: Loss = 2.9317
+  Batch 800: Loss = 2.9335
+  Batch 900: Loss = 2.9321
+  Batch 1000: Loss = 2.9288
+  Batch 1100: Loss = 2.9283
+  Batch 1200: Loss = 2.9260
+  Batch 1300: Loss = 2.9251
+  Batch 1400: Loss = 2.9244
+  Batch 1500: Loss = 2.9253
+
+Epoch 16 Training:
+  Loss: 2.9257
+  Time: 110.26s
+Epoch 16 Validation:
+  Loss: 2.8044
+Saved best model (val_loss=2.8044)
+
+================================================================================
+Epoch 17/20
+================================================================================
+  Batch 100: Loss = 2.9267
+  Batch 200: Loss = 2.9243
+  Batch 300: Loss = 2.9336
+  Batch 400: Loss = 2.9338
+  Batch 500: Loss = 2.9338
+  Batch 600: Loss = 2.9285
+  Batch 700: Loss = 2.9241
+  Batch 800: Loss = 2.9239
+  Batch 900: Loss = 2.9225
+  Batch 1000: Loss = 2.9192
+  Batch 1100: Loss = 2.9186
+  Batch 1200: Loss = 2.9156
+  Batch 1300: Loss = 2.9152
+  Batch 1400: Loss = 2.9137
+  Batch 1500: Loss = 2.9148
+
+Epoch 17 Training:
+  Loss: 2.9148
+  Time: 110.26s
+Epoch 17 Validation:
+  Loss: 2.7947
+Saved best model (val_loss=2.7947)
+
+================================================================================
+Epoch 18/20
+================================================================================
+  Batch 100: Loss = 2.9268
+  Batch 200: Loss = 2.9192
+  Batch 300: Loss = 2.9259
+  Batch 400: Loss = 2.9264
+  Batch 500: Loss = 2.9263
+  Batch 600: Loss = 2.9209
+  Batch 700: Loss = 2.9135
+  Batch 800: Loss = 2.9119
+  Batch 900: Loss = 2.9131
+  Batch 1000: Loss = 2.9105
+  Batch 1100: Loss = 2.9104
+  Batch 1200: Loss = 2.9080
+  Batch 1300: Loss = 2.9069
+  Batch 1400: Loss = 2.9062
+  Batch 1500: Loss = 2.9065
+
+Epoch 18 Training:
+  Loss: 2.9071
+  Time: 110.32s
+Epoch 18 Validation:
+  Loss: 2.8000
+
+================================================================================
+Epoch 19/20
+================================================================================
+  Batch 100: Loss = 2.9179
+  Batch 200: Loss = 2.9151
+  Batch 300: Loss = 2.9186
+  Batch 400: Loss = 2.9228
+  Batch 500: Loss = 2.9183
+  Batch 600: Loss = 2.9149
+  Batch 700: Loss = 2.9090
+  Batch 800: Loss = 2.9103
+  Batch 900: Loss = 2.9064
+  Batch 1000: Loss = 2.9051
+  Batch 1100: Loss = 2.9033
+  Batch 1200: Loss = 2.9018
+  Batch 1300: Loss = 2.9017
+  Batch 1400: Loss = 2.9009
+  Batch 1500: Loss = 2.9008
+
+Epoch 19 Training:
+  Loss: 2.9008
+  Time: 110.24s
+Epoch 19 Validation:
+  Loss: 2.8030
+
+================================================================================
+Epoch 20/20
+================================================================================
+  Batch 100: Loss = 2.9070
+  Batch 200: Loss = 2.9072
+  Batch 300: Loss = 2.9160
+  Batch 400: Loss = 2.9158
+  Batch 500: Loss = 2.9135
+  Batch 600: Loss = 2.9096
+  Batch 700: Loss = 2.9051
+  Batch 800: Loss = 2.9061
+  Batch 900: Loss = 2.9038
+  Batch 1000: Loss = 2.9014
+  Batch 1100: Loss = 2.8996
+  Batch 1200: Loss = 2.8966
+  Batch 1300: Loss = 2.8960
+  Batch 1400: Loss = 2.8952
+  Batch 1500: Loss = 2.8951
+
+Epoch 20 Training:
+  Loss: 2.8953
+  Time: 110.37s
+Epoch 20 Validation:
+  Loss: 2.7889
+
+Sample Captions (Epoch 20):
+--------------------------------------------------------------------------------
+
+1. Race: Light
+   Generated: a man is skiing down a snow covered slope
+   Reference: a woman posing for the camera standing on skis
+
+2. Race: Light
+   Generated: a man is skiing down a snow covered slope
+   Reference: a woman standing on skiis while posing for the camera
+
+3. Race: Light
+   Generated: a man is skiing down a snow covered slope
+   Reference: a woman in a red jacket skiing down a slope
+
+4. Race: Light
+   Generated: a man is skiing down a snow covered slope
+   Reference: a young woman is skiing down the mountain slope
+
+5. Race: Light
+   Generated: a man is skiing down a snow covered slope
+   Reference: a person on skis makes her way through the snow
+--------------------------------------------------------------------------------
+
+Saved checkpoint: /users/kvesesso/scratch/debiasing-project/checkpoints/ckpt-4
+Saved best model (val_loss=2.7889)
+
+================================================================================
+TRAINING COMPLETE!
+================================================================================
+Best validation loss: 2.7889
+Model saved to: /users/kvesesso/scratch/debiasing-project/checkpoints
+
+Training finished! Run evaluation script for bias analysis.
+Training complete!
